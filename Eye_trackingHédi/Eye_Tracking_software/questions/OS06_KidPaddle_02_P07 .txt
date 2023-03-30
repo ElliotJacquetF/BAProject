@@ -1,0 +1,4 @@
+Combien de fois le personnage réussit-il à éviter la chute du rocher ?
+Une fois.
+Deux fois.
+Trois fois.
