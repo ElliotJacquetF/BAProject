@@ -1,5 +1,5 @@
 import numpy as np
-from matplotlib import image, pyplot, lines
+from matplotlib import image, pyplot, lines, font_manager as fm
 from PIL import Image, ImageDraw, ImageFont
 import os
 import Statistics as st
@@ -64,38 +64,47 @@ def drawAOIOverImages(conf):
         #Create Image object
         im = Image.open(conf.STIMULI+i.imageName)
         idx = i.imageNo
-        font = ImageFont.truetype('/Library/Fonts/Arial.ttf', 100)
+        font_path = os.path.join("fonts", "Arial.ttf")
+
         
         #Draw Image
         draw = ImageDraw.Draw(im)
         
+        
         #Draw rectangle that represents the AOI with the AOI id too. 
         for aoi in conf.aoisByImage[idx]:
 
-            segmentations = aoi.segmentation[0]
-
-            # Draw the polygon on the image for each annotation
-            #for seg in segmentations:
-            draw.polygon(segmentations, outline ="red")
+            if (len(aoi.segmentation) == 0):
+                continue
             
-            # Define the font to use for the text
-            font = ImageFont.truetype('/Library/Fonts/Arial.ttf', size=40)
+            for seg in aoi.segmentation:
 
-            # Create a shapely polygon object from the segments
-            polygon = Polygon([(segmentations[i], segmentations[i+1]) for i in range(0, len(segmentations), 2)])
+                if len(seg) == 0:
+                    continue
+                    
+                segmentations = seg
+                
+                # Draw the polygon on the image for each annotation
+                #for seg in segmentations:
+                draw.polygon(segmentations, outline ="red")
+                
+                
+                # Define the font to use for the text
+                font = ImageFont.truetype(font_path, size=40)
 
-            # Compute the centroid of the polygon
-            centroid = polygon.centroid
+                # Compute the centroid of the polygon
+                centroid = aoi.getCentroid(seg)
             
-            text_width, text_height = draw.textsize(str(aoi.aoi_id), font=font)
+                text_width, text_height = draw.textsize(str(aoi.aoi_id), font=font)
 
-            # Calculate the coordinates to center the text
-            text_x = int(centroid.x) - text_width // 2
-            text_y = int(centroid.y) - text_height // 2
+                # Calculate the coordinates to center the text
+                text_x = int(centroid.x) - text_width // 2
+                text_y = int(centroid.y) - text_height // 2
             
-            # Draw the text on the image
-            draw.text((text_x, text_y), str(aoi.aoi_id), fill='black', font=font)
-
+                # Draw the text on the image
+                draw.text((text_x, text_y), str(aoi.aoi_id), fill='black', font=font)
+                        
+        
         #Save image on the configured folder
         im.save(conf.AOI_FOLDER+i.imageName, "PNG")
 
@@ -233,7 +242,7 @@ def drawHeatmap(heatmap, conf, savefilename, ax, fig, saveFiles=True, alpha=0.5)
          heatmap[heatmap < conf.HEATMAP_THRESHOLD] = np.NaN
     
     # Draw heatmap on top of image
-    ax.imshow(heatmap, cmap='jet', alpha=alpha)
+    ax.imshow(heatmap, cmap='inferno', alpha=alpha)
 
     # invert the y axis, as (0,0) is top left on a display
     ax.invert_yaxis()
@@ -273,8 +282,8 @@ def computeHeatmap(conf, gazepoints, fig, ax, dispsize, saveFiles, savefilename=
     ## create heatmapWiener
     for fix in gazepoints:
         # get x and y coordinates of the current fixation
-        x = strt + fix[conf.X_COORDINATES_INDEX] - int(gwh / 2)-40
-        y = strt + fix[conf.Y_COORDINATES_INDEX] - int(gwh / 2)-100
+        x = strt + fix[conf.X_COORDINATES_INDEX] - int(gwh / 2) + 30
+        y = strt + fix[conf.Y_COORDINATES_INDEX] - int(gwh / 2) - 20
         
         # correct Gaussian size if either coordinate falls outside of
         # display boundaries
@@ -345,7 +354,7 @@ def drawFocusmap(conf, heatmap, fig, ax, savefilename, saveFiles=True):
     else:
         fig.show()
 
-def generateHeatmapAndFocusmap(fix, imageNo, isParticipant, conf, saveFiles, dispsize, participantId = 0, heatmaps = None):
+def generateHeatmapAndFocusmap(fix, imageNo, isParticipant, conf, saveFiles, dispsize, name, participantId = 0, heatmaps = None):
     """
     Method that will generate one heatmap and one focusmap for the 
     arguments:
@@ -355,6 +364,10 @@ def generateHeatmapAndFocusmap(fix, imageNo, isParticipant, conf, saveFiles, dis
         - conf : the conf object
         - saveFiles: boolean, if we want to save file or just plot them 
         - dispsize: the size of the images in pixels
+        - type of heatmap: 0 - normal (text + bubble + other)
+                           1 - no text
+                           2 - only text
+                           3 - only bubble
     optional:
         - participantId: the id of the participant
         - heatmaps: the aggregation of all participant heatmaps
@@ -373,14 +386,14 @@ def generateHeatmapAndFocusmap(fix, imageNo, isParticipant, conf, saveFiles, dis
         ext = "_participant_"+str(participantId)+".png"
 
         #Generate and get heatmap back
-        heatmap = computeHeatmap(conf, fix, fig1, ax1, dispsize, saveFiles, savefilename=conf.HEATMAP_FOLDER+suppl+imgName+ext)
+        heatmap = computeHeatmap(conf, fix, fig1, ax1, dispsize, saveFiles, savefilename=conf.HEATMAP_FOLDER+ name+suppl+imgName+ext)
 
         #Generate Focusmap by thresholding the heatmap
-        drawFocusmap(conf, np.copy(heatmap), fig2, ax2, conf.FOCUSMAP_FOLDER+suppl+imgName+ext, saveFiles)
+        drawFocusmap(conf, np.copy(heatmap), fig2, ax2, conf.FOCUSMAP_FOLDER+name+suppl+imgName+ext, saveFiles)
     else:
         #Get the aggregated heatmap from all participant and draw them 
-        drawHeatmap(np.copy(heatmaps), conf, conf.HEATMAP_FOLDER+imgName, ax1, fig1, saveFiles)
-        drawFocusmap(conf, heatmaps, fig2, ax2, conf.FOCUSMAP_FOLDER+imgName, saveFiles)
+        drawHeatmap(np.copy(heatmaps), conf, conf.HEATMAP_FOLDER+name+imgName, ax1, fig1, saveFiles)
+        drawFocusmap(conf, heatmaps, fig2, ax2, conf.FOCUSMAP_FOLDER+name+imgName, saveFiles)
 
     #Close pyplot figures
     pyplot.close(fig1)
@@ -396,16 +409,34 @@ def generateAllHeatmapsAndFocusmap(conf, saveFiles = True):
         - saveFiles: boolean, if we want to save file or just plot them 
     """
     for key in conf.fixations:
-        curImageFixations = conf.fixations[key]
+        curImageFixationsNormal = conf.fixations[key]
+        curImageFixationsNoText = conf.fixationsNoText[key]
+        curImageFixationsOnlyText = conf.fixationsOnlyText[key]
+        
         img = ld.getComicImage(conf.imageList, key)
-        heatmaps = np.zeros((img.height,img.width), dtype=float)
+        
+        heatmapsNormal = np.zeros((img.height,img.width), dtype=float)
+        heatmapsNoText = np.zeros((img.height,img.width), dtype=float)
+        heatmapsOnlyText = np.zeros((img.height,img.width), dtype=float)
+        
         dispsize = (img.width, img.height)
 
-        for tup in curImageFixations:
+        for tup in curImageFixationsNormal:
             fix=tup[1]
-            heatmaps += generateHeatmapAndFocusmap(fix[:,0:conf.Y_COORDINATES_INDEX+1], key, True, conf, saveFiles, dispsize, participantId = tup[0])
+            heatmapsNormal += generateHeatmapAndFocusmap(fix[:,0:conf.Y_COORDINATES_INDEX+1], key, True, conf, saveFiles, dispsize, "normal/", participantId = tup[0])
+            
+        for tup in curImageFixationsNoText:
+            fix=tup[1]
+            heatmapsNoText += generateHeatmapAndFocusmap(fix[:,0:conf.Y_COORDINATES_INDEX+1], key, True, conf, saveFiles, dispsize, "noText/", participantId = tup[0])
+        
+        for tup in curImageFixationsOnlyText:
+            fix=tup[1]
+            heatmapsOnlyText += generateHeatmapAndFocusmap(fix[:,0:conf.Y_COORDINATES_INDEX+1], key, True, conf, saveFiles, dispsize, "onlyText/", participantId = tup[0])
+        
+        generateHeatmapAndFocusmap(None, key, False, conf, saveFiles, dispsize, "normal/", heatmaps=heatmapsNormal)
+        generateHeatmapAndFocusmap(None, key, False, conf, saveFiles, dispsize, "noText/", heatmaps=heatmapsNoText)
+        generateHeatmapAndFocusmap(None, key, False, conf, saveFiles, dispsize, "onlyText/", heatmaps=heatmapsOnlyText)
 
-        generateHeatmapAndFocusmap(None, key, False, conf, saveFiles, dispsize, heatmaps=heatmaps)     
 
 def createGazeplot(outputFileByNb, outputFileByDuration, fig, ax, fig2, ax2, gazes, max_radius):
     """
@@ -598,7 +629,7 @@ def histogramByImage(statCurImage, imageNo, conf, saveFiles, imageName):
     #print("this is allLists dimensions:", len(allLists))
 
     #Create the number of subplots corresponding to the number of categories
-    fig, axs = pyplot.subplots(len(conf.categories),figsize=(15,30), sharey=False)
+    fig, axs = pyplot.subplots(len(conf.categories) + 1,figsize=(15,30), sharey=False)
 
     #Iterate over all metrics and create one subplots by metric
     for nb in range(len(conf.categories)):
@@ -609,12 +640,10 @@ def histogramByImage(statCurImage, imageNo, conf, saveFiles, imageName):
         #Get over each AOI and get mean and std dev for the current metric 
         for aoiNb in aoiNbList:
             curItem = curList[aoiNb]
-            #print('this is curItem :', curItem)
-            for val in curItem.values():
-                print('this is val : ',val)
+            
             if any([str(val) == "nan" for val in curItem.values()]):
                 curItem = {'mean': 0.0, 'stdDev': 0.0, 'boundUp': 0, 'boundDown': 0}
-                print('this is curItem : :',curItem)
+                
             meanList.append(curItem["mean"])
             errList.append(curItem["stdDev"])
 
@@ -650,19 +679,219 @@ def histogramByImage(statCurImage, imageNo, conf, saveFiles, imageName):
         for i, v in enumerate(meanList):
                 axs[nb].text(i-0.1, v , str(v), color='black', va="bottom", ha="center",rotation=90, fontsize=10, fontweight='bold')
 
+    
+    #Get the fastest reached AOIs
+    fastest_reached_aois = shortest_time_to_first_fixation(statCurImage, conf, imageNo)
+
+    #Create a new list to store the AOI names, their respective supercategory, and their time to first fixation
+    fastest_reached_aois_with_supercat = [(aoi , conf.aoisByImage[imageNo][aoi].supercategory) for aoi in fastest_reached_aois]
+    print("this is fastest_reached_aois_with_supercat:",fastest_reached_aois_with_supercat)
+    # Create a list of colors for each supercategory
+    supercat_colors = [conf.supercategoriesColors[conf.supercategories.index(supercat)] for _, supercat in fastest_reached_aois_with_supercat]
+
+    #Create the histogram of fastest reached AOIs
+    axs[len(conf.categories)].set(xlabel="AOI ID and Supercategory", ylabel="Milliseconds")
+    axs[len(conf.categories)].set_title("Fastest Reached AOIs for image n°" + str(imageNo) + " ("+imageName+")")
+    axs[len(conf.categories)].set_xticks(range(0, len(fastest_reached_aois_with_supercat)))
+    axs[len(conf.categories)].set_xticklabels([(str(aoi[0]) + " - " + aoi[1]) for aoi in fastest_reached_aois_with_supercat], rotation=45, ha='right')
+    
+    # Set the color of each bar to the corresponding supercategory color
+    axs[len(conf.categories)].bar(range(0, len(fastest_reached_aois_with_supercat)), [statCurImage[aoi]['Time to first fixation']['mean'] for aoi, _ in fastest_reached_aois_with_supercat], alpha=0.5, color=supercat_colors)
+    
+    #Make the font biiger Adjust the layout and display the plot
+    pyplot.rcParams.update({'font.size': 25})
+    pyplot.subplots_adjust(hspace=0.5)
+    fig.tight_layout()
+
+
+    #Save the histograms or plot them
+    if(saveFiles):
+        fig.savefig(conf.HISTOGRAMS_FOLDER+"image/"+imageName+"_histograms.png")
+    else:
+        fig.show()
+
+    #Close the figures
+    pyplot.close(fig)
+    
+    
+def shortest_time_to_first_fixation(statCurImage, conf, imageNo):
+    """
+    Helper function for the histogramsByImage function.
+    Returns a list of the id's of the ten AOIs that have the shortest time to first fixation
+    amongst the AOIs having a time to first fixation different than zero.
+    arguments: 
+        - statCurImage: The statistics for the current image, dictionnary of the type {aoi => AOIStatistics}
+        - conf: The configuration object
+        - imageNo: The current image number
+    """
+    
+    non_zero_tff_aois = []   
+    for aoi in statCurImage.keys():
+        # Skip AOIs with a time to first fixation of zero or with undesired supercategories
+        aoi_supercategory = conf.aoisByImage[imageNo][aoi].supercategory
+        if any([str(val) == "nan" for val in statCurImage[aoi]["Time to first fixation"].values()]) or aoi_supercategory in ['OTHER', 'BACKGROUND']:
+            continue
+        else: 
+            non_zero_tff_aois.append(aoi)
+    
+    # Sort the AOIs by ascending time to first fixation
+    sorted_aois_by_tff = sorted(non_zero_tff_aois, key=lambda aoi: statCurImage[aoi]["Time to first fixation"]['mean'])
+    
+    # Return the top 10 AOIs with the shortest time to first fixation
+    return sorted_aois_by_tff[:10]
+
+    
+    
+def histogramBySuperCategory(statCurImage, imageNo, conf, saveFiles, imageName):
+    """
+    Create histograms for all metrics for one image grouped by supercategory
+    arguments: 
+        - statCurImage: The statistics for the current image, dictionary of the type {aoi => AOIStatistics}
+        - imageNo : the current image number
+        - conf: the config object
+        - saveFiles: need to save the histogram or plot it
+        - imageName: the current stimuli name
+    """
+
+    # Initialize dictionaries of the form {supercategory => {category => []}}
+    supercategoryMetrics = {}
+    for supercategory in conf.supercategories:
+        if(supercategory == "OTHER"):
+            continue
+        supercategoryMetrics[supercategory] = {category: [] for category in conf.categories}
+
+    # Iterate over the statistics by AOI and add the metric statistics to the corresponding supercategory
+    for aoi in statCurImage:
+        aoiStats = statCurImage[aoi]
+        supercategory = conf.aoisByImage[imageNo][aoi].supercategory # get the supercategory of the AOI
+        for category in conf.categories:
+            supercategoryMetrics[supercategory][category].append(aoiStats[category])
+
+    # Create lists of metrics sorted by supercategory
+    allLists = []
+    
+
+    for category in conf.categories:
+        categoryList = []
+        for supercategory in conf.supercategories:
+            if(supercategory == "OTHER"):
+                continue
+            supercategoryList = supercategoryMetrics[supercategory][category]
+            # sum up the fixation values for each AOI in the current supercategory and append to the categoryList
+            categoryList.append(sum([sum(aoi.values()) for aoi in supercategoryList]))
+        allLists.append(categoryList)
+
+    # Labels for the axis
+    yaxislabels = ["Number", "Milliseconds", "Number", "Milliseconds", "Seconds"]
+
+    # Create the number of subplots corresponding to the number of categories
+    fig, axs = pyplot.subplots(len(conf.categories), figsize=(20, 30), sharey=False)
+
+    count = 0
+    # Iterate over all metrics and create one subplot by metric
+    for nb in range(len(conf.categories)):
+        #skip the time to first fixation metric
+        if(nb == 3):
+            continue
+
+        curList = allLists[nb]
+        
+        newNb = nb
+        
+        if (nb > 3):
+            newNb = nb - 1
+            
+        # Setup the current subplot
+        try:
+            maxs = np.max(np.array(curList))
+            maxNb = math.ceil(maxs)
+            ysteps = max(int(maxNb/7), 1)
+
+            axs[newNb].set(xlabel="Super Category ID", ylabel=yaxislabels[nb])
+            axs[newNb].set_xticks(range(len(conf.supercategories)))
+            axs[newNb].set_xticklabels(conf.supercategories)
+            axs[newNb].set_yticks(range(0, maxNb + ysteps, ysteps))
+            axs[newNb].set_ylim(bottom=0.)
+            axs[newNb].set_title(conf.categories[nb] + " for image n°" + str(imageNo) + " (" + imageName + ")")
+            axs[newNb].bar(range(len(conf.supercategories)),  curList, alpha=0.5, error_kw=dict(ecolor='grey', lw=2, capsize=5), color=[conf.supercategoriesColors[conf.supercategories.index(cat)] for cat in conf.supercategories])
+            
+        except ValueError:  # raised if y is empty.
+            pass
+
+        for i, v in enumerate(curList):
+                axs[newNb].text(i-0.1, v , str(v), color='black', va="bottom", ha="center",rotation=90, fontsize=10, fontweight='bold')
+                
+    # add the area percentage subplot to the figure
+    area_percentage = calculate_area_percentage_by_supercategory(conf.aoisByImage, imageNo)
+    supercategory_names = list(area_percentage.keys())
+    area_percentages = list(area_percentage.values())
+
+    # Index of the new subplot
+    new_subplot_index = len(conf.categories) - 1
+
+    # Create the area percentage histogram as a subplot
+    axs[new_subplot_index].set(xlabel="Super Category ID", ylabel="Percentage of Area")
+    axs[new_subplot_index].set_xticks(range(len(supercategory_names)))
+    axs[new_subplot_index].set_xticklabels(supercategory_names)
+    axs[new_subplot_index].set_ylim(bottom=0., top=100.)
+    axs[new_subplot_index].set_title("Percentage of Area by Super Category for image n°" + str(imageNo) + " (" + imageName + ")")
+    axs[new_subplot_index].bar(range(len(supercategory_names)), area_percentages, alpha=0.5, color=[conf.supercategoriesColors[conf.supercategories.index(cat)] for cat in supercategory_names])
+
+    for i, v in enumerate(area_percentages):
+        axs[new_subplot_index].text(i - 0.1, v, f"{v:.1f}%", color='black', va="bottom", ha="center", rotation=90, fontsize=10, fontweight='bold')
+
+
+    #Make the font biiger Adjust the layout and display the plot
+    pyplot.rcParams.update({'font.size': 25})
     pyplot.subplots_adjust(hspace=0.5)
     fig.tight_layout()
 
     #Save the histograms or plot them
     if(saveFiles):
-        fig.savefig(conf.HISTOGRAMS_FOLDER+"/"+imageName+"_histograms.png")
+        fig.savefig(conf.HISTOGRAMS_FOLDER+"/category/"+imageName+"_histograms.png")
     else:
         fig.show()
     
     #Close the figures
     pyplot.close(fig)
 
+def calculate_area_percentage_by_supercategory(aois_by_image, image_no):
+    """
+    Helper function for HistogramsBySuperCategory.
+    Calculate the percentage of area taken by each supercategory in the image.
 
+    Arguments:
+        - aois_by_image: A dictionary that maps image numbers to AOIs (the same format as conf.aoisByImage)
+        - image_no: The current image number
+
+    Returns:
+        A dictionary that maps supercategory names to their area percentages in the image.
+    """
+    # Initialize a dictionary to store the total area for each supercategory
+    supercategory_areas = {}
+
+    # Iterate over AOIs in the current image
+    for aoi in aois_by_image[image_no].values():
+        supercategory = aoi.supercategory
+
+        # Calculate the area of the current AOI
+        aoi_area = aoi.getPixelNumber()
+
+        # Add the AOI area to the corresponding supercategory
+        if supercategory in supercategory_areas:
+            supercategory_areas[supercategory] += aoi_area
+        else:
+            supercategory_areas[supercategory] = aoi_area
+
+    # Calculate the total area of all AOIs in the image
+    total_area = sum(supercategory_areas.values())
+
+    # Calculate the area percentage for each supercategory
+    supercategory_percentage = {supercategory: (area / total_area) * 100 for supercategory, area in supercategory_areas.items()}
+
+    return supercategory_percentage
+
+    
 def createAllHistograms(statistics, conf, saveFiles = True):
     """
     Generate histogram for every images
@@ -678,6 +907,7 @@ def createAllHistograms(statistics, conf, saveFiles = True):
     #Iterate over all images and create one histogram by image.
     for imageNo in sorted(statistics.keys()):
         histogramByImage(statistics[imageNo], imageNo, conf,  saveFiles=saveFiles, imageName = ld.getComicImage(conf.imageList,imageNo).imageNameShort)
+        histogramBySuperCategory(statistics[imageNo], imageNo, conf,  saveFiles=saveFiles, imageName = ld.getComicImage(conf.imageList,imageNo).imageNameShort)
 
 
 def saveMap(map, imNo, partNo, conf, binMap=False, salMap=False, combBinMap=False):

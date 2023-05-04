@@ -2,6 +2,10 @@ import numpy as np
 import LoadDatas as ld
 import Visualisations as vs
 from matplotlib.path import Path
+from PIL import Image, ImageDraw, ImageFont
+import math
+import cv2
+import Config as conf
 
 class AOIStatistic:
     """
@@ -260,35 +264,102 @@ def getAOINumberInImage(aoisByImage, imageNo, x, y):
 
     if imageNo not in aoisByImage:
         return -1
-
+    
     aois = aoisByImage[imageNo]
 
+    possibleAOIs = []
+    
     for aoi in aois:
-        if aoi.category == "panel":
-            continue
-            
+           
         seg_tuples = [tuple()]
+        
+        for seg in aoi.segmentation:
+            if len(seg) == 0:
+                continue 
                 
-        for i in range(len(aoi.segmentation[0]) - 1):
-            seg_tuples.append((aoi.segmentation[0][i], aoi.segmentation[0][i+1]))
+            for i in range(len(seg) - 1):
+                if(i % 2 == 0):
+                    seg_tuples.append((seg[i], seg[i+1]))
         
-        seg_tuples = seg_tuples[1:]
-        seg_tuples.append((seg_tuples[-1][1], seg_tuples[0][0]))
+            seg_tuples = seg_tuples[1:]
         
-
-        # Create a list of vertices from the tuples
-        vertices = []
-        for seg in seg_tuples:
-            vertices.append((seg[0], seg[1]))
 
         # Create a Path object from the vertices
 
-        path = Path(vertices + [vertices[0]])
-        if path.contains_point((x, y)):
-            return aoi.aoi_id
+            path = Path(np.array(seg_tuples))
+            if path.contains_point((x, y)):
+                possibleAOIs.append(aoi)
+    
+    if(len(possibleAOIs) == 0):
+        return aoisByImage[imageNo][len(aoisByImage[imageNo]) - 1].aoi_id
+    
+    previousSuper = ""
+    newId = -1
+    if len(possibleAOIs) > 1:
+        for aoi in possibleAOIs:
+            if(aoi.supercategory == "TEXT"):
+                return aoi.aoi_id
+            elif(aoi.supercategory == "CHARACTER"):
+                previousSuper = "CHARACTER"
+                newId = aoi.aoi_id
+            elif(aoi.supercategory == "ANIMAL" and previousSuper != "CHARACTER"):
+                previousSuper = "ANIMAL"
+                newId = aoi.aoi_id
+            elif(aoi.supercategory == "OBJECT" and previousSuper != "CHARACTER" and previousSuper != "ANIMAL"):
+                previousSuper = "OBJECT"
+                newId = aoi.aoi_id
+            elif(aoi.supercategory == "BACKGROUND" and previousSuper != "CHARACTER" and previousSuper != "ANIMAL" and previousSuper != "OBJECT"):
+                previousSuper = "BACKGROUND"
+                newId = aoi.aoi_id
+                
+        return newId
+                
+    return possibleAOIs[0].aoi_id
 
-    return -1
 
+def changeFixations(conf):
+    """
+    Changes the fixations dictionary for the heatmaps generation
+
+    Returns:
+        dictionary: the update fixations dictionary based on the param text
+    """
+    
+    fixationsNoText = {}
+    fixationsOnlyText = {}
+    
+    for k in conf.fixations:
+        for tup in conf.fixations[k]:
+            arrayOnlyText = np.empty((0, tup[1].shape[1]), dtype=tup[1].dtype)
+            arrayNoText = np.empty((0, tup[1].shape[1]), dtype=tup[1].dtype)
+            
+            #Iterate over all fixations of the currentUser in the image k
+            
+            for fix in tup[1]:
+                aoiNb = getAOINumberInImage(conf.aoisByImage,k,fix[conf.X_COORDINATES_INDEX],fix[conf.Y_COORDINATES_INDEX])
+                
+                #If the point is not in an AOI keep the fixation
+                if(aoiNb == -1):
+                    arrayNoText = np.vstack([arrayNoText, fix])
+                    continue
+                
+                #Gets the category of the aoi on which the point is
+                category = conf.aoisByImage[k][aoiNb].category
+                
+                #If the point is on text, keep fixation for onlyText
+                if(category == 27 or category == 26):
+                    arrayOnlyText = np.vstack([arrayOnlyText, fix])
+                    
+                #If the point is on an AOI that's not text or comic bubble
+                else:
+                    arrayNoText = np.vstack([arrayNoText, fix])
+                
+            fixationsNoText.setdefault(k,list()).append((tup[0],arrayNoText))
+            fixationsOnlyText.setdefault(k,list()).append((tup[0],arrayOnlyText))
+            
+            
+    return (fixationsNoText, fixationsOnlyText)
+                        
 
 
 def getUserStatistics(conf):

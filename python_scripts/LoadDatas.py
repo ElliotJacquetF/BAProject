@@ -4,6 +4,7 @@ import math
 import glob
 import csv
 import os
+from shapely.geometry import Polygon
 from PIL import Image
 from typing import Dict, List
 from pathlib import Path
@@ -41,19 +42,31 @@ class AOI:
         - category : the category of the AOI (text bubble, charachter,...)
         - segmentation : delimitation of the AOI
         - attributes : atttributes of the AOI
-        - the id of the image in the json file
+        - real_id: the id of the image in the json file
+        - supercategory : super category of the aoi
+        - area : area of the AOI
     """
 
-    def __init__(self, aoi_id, image_id, category, segmentation, attributes, real_id):
+    def __init__(self, aoi_id, image_id, category, segmentation, attributes, real_id, supercategory, area):
         self.aoi_id = aoi_id
         self.image_id = image_id
         self.category = category
         self.segmentation = segmentation
         self.attributes = attributes
+        self.real_id = real_id
+        self.supercategory = supercategory
+        self.area = area
         
     def toString(self):
         print("AOI id "+str(self.aoi_id)+ ", whose image's id is "+ str(self.image_id) + " and the category is : " + str(self.category))
 
+    def getCentroid(self, seg):
+        """
+        Return the center of a chosen segmentation of the AOI under the form of a Polygone.centroid
+        seg : the segmentation we want to get the center of
+        """
+        polygon = Polygon([(seg[i], seg[i+1]) for i in range(0, len(seg), 2)])
+        return polygon.centroid
 
 def getComicImage(imageList,imageNo):
     """
@@ -136,21 +149,34 @@ def getAOIListByImage(conf):
             count = 0
             for anno in data[0]["annotations"]:
                 if anno["image_id"] == image_id:
+         
                     #if(isinstance(anno["segmentation"], list)):
-                    if anno["category_id"] == 25 or anno["category_id"] == 24:
+                    #if anno["category_id"] == 25 or anno["category_id"] == 24:
+                    #If the annotation is horizon then don't count
+                    if anno["category_id"] == 24:
                         continue
-                    if(len(anno["segmentation"]) != 0):
+                      
+                    if type(anno["segmentation"]) is dict:
+                        print("Image " + str(anno["image_id"]) + " AOI " + str(anno["id"]) + str(anno["category_id"]))
+                        continue
+                        
+                    if(len(anno["segmentation"]) != 0 and len(anno["segmentation"][0]) != 0):
                         seg = anno["segmentation"]
                     else:
                         continue
+                    
+                    supercategory = 0
+                    for category in data[0]["categories"]:
+                        if category["id"] == anno["category_id"]:
+                            supercategory = category["supercategory"]
                             
-                    #else:
                     
                         
-                    AOIs.append(AOI(count, anno["image_id"], anno["category_id"], seg, anno["attributes"], anno["id"]))
+                    AOIs.append(AOI(count, anno["image_id"], anno["category_id"], seg, anno["attributes"], anno["id"], supercategory, anno["area"]))
                     count += 1
                     
-
+            
+            AOIs.append(AOI(count, image_id, 21, [[]], [], 0, "BACKGROUND", 0))
             aoisByImage[image_id] = AOIs
 
     return aoisByImage
@@ -282,6 +308,7 @@ def getFixations(conf):
                 reader = csv.reader(f, delimiter=',')
                 headers = next(reader) #Just to remove the header line in the CSV
                 data = np.array(list(reader)).astype(np.int)
+               
             
             #If there is at least one gazepoint
             if (data.size):

@@ -17,6 +17,11 @@ class Config:
     #List of categories of interest
     categories = ["Fixation count", "Fixation duration", "Gaze count", "Time to first fixation", "Viewing Time"]
 
+    #List of supercategories
+    supercategories = ["OBJECT", "ANIMAL", "BACKGROUND", "CHARACTER", "TEXT"]
+    #List of colors for each supercategory
+    supercategoriesColors = ["#FFFF00", "#FFA500", "#808080", "#FF0000", "#0000FF"]
+
     #Fixations files constants
     EXTENSION_LENGTH = 4
     NB_LINES_BETWEEN_AOI_LIST = 15
@@ -70,7 +75,7 @@ class Config:
     gaussianKernel = None
 
     #AOI file
-    AOIS_FILE = RESOURCES + "instances_default.json"
+    AOIS_FILE = RESOURCES + "instances_default_modified_2.json"
 
     ## Thresholds
     # IDT Thresholds : These thresholds come from the Paper : One algorithm to rule them all ? An evaluation and discussion of ten eye movement event-detection algortihms, published in Behavior Research Methods

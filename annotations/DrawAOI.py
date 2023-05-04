@@ -35,7 +35,7 @@ for filename in os.listdir(input_dir):
         image_id = get_image_id(filename, data)
 
         # Filter annotations for this image
-        annotations = [anno for anno in data["annotations"] if anno["image_id"] == image_id]
+        annotations = [anno for anno in data["annotations"] if anno["image_id"] == image_id and anno["category_id"] == 12]
 
         # Get the segmentation data for each annotation object
         segmentations = []
@@ -45,7 +45,7 @@ for filename in os.listdir(input_dir):
 
         # Draw the polygon on the image for each annotation
         draw = ImageDraw.Draw(image)
-        for seg in segmentations:
+        for seg in segmentations:   
             draw.polygon(seg, outline="red")
 
         # Save the annotated image
